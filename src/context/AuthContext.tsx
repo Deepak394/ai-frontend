@@ -18,25 +18,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticating, setIsAuthenticating] = useState<boolean>(false);
   const [isRegistering, setIsRegistering] = useState<boolean>(false);
+  const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
-    checkExistingToken();
+    bootstrap();
   }, []);
 
-  async function checkExistingToken() {
-    const token = await SecureStore.getItemAsync("authToken");
-    setIsLoggedIn(!!token);
-    setIsLoading(false);
+  async function bootstrap() {
+    try {
+      const token = await SecureStore.getItemAsync("authToken");
+      if (token) {
+        const storedUser = await SecureStore.getItemAsync("user");
+        setUser(storedUser ? JSON.parse(storedUser) : null);
+        setIsLoggedIn(true);
+      }
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   async function login(email: string, password: string) {
     setIsAuthenticating(true);
     try {
       const response: any = await api.post("/auth/login", { email, password });
-      const { token, success, message } = response;
+      const { token, success, message, user: loggedInUser } = response;
 
       if (success) {
         await SecureStore.setItemAsync("authToken", token);
+        await SecureStore.setItemAsync("user", JSON.stringify(loggedInUser));
+        setUser(loggedInUser);
         setIsLoggedIn(true);
       } else {
         throw new Error(message || "Invalid response from server");
@@ -48,22 +58,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function register(email: string, password: string) {
     setIsRegistering(true);
-  
     try {
       const response: any = await api.post("/auth/register", {
         email,
         password,
       });
-      console.log(response, "response");
       const { success, message } = response;
-      if (success) {
-        setIsRegistering(false);
-      } else {
-
+      if (!success) {
         throw new Error(message || "Invalid response from server");
       }
     } catch (error) {
-        console.log(error, "error");
       throw new Error((error as Error).message || "Failed to register");
     } finally {
       setIsRegistering(false);
@@ -72,6 +76,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function logout() {
     await SecureStore.deleteItemAsync("authToken");
+    await SecureStore.deleteItemAsync("user");
+    setUser(null);
     setIsLoggedIn(false);
   }
 
@@ -85,6 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         register,
         logout,
+        user,
       }}
     >
       {children}

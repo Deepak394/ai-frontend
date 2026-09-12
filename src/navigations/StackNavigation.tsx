@@ -1,15 +1,39 @@
-import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
-import { View, ActivityIndicator, StyleSheet, Text } from "react-native";
+
+import {
+  NavigationContainer,
+  DefaultTheme,
+} from "@react-navigation/native";
+
+import {
+  View,
+  ActivityIndicator,
+  StyleSheet,
+  Text,
+} from "react-native";
+
+import {
+  createNativeStackNavigator,
+} from "@react-navigation/native-stack";
+
 import { useAuth } from "../hook/AuthHook";
-import HomeScreen from "../screens/HomeScreen";
+
 import LoginScreen from "../screens/LoginScreen";
 import RegisterScreen from "../screens/RegisterScreen";
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
-const Stack = createNativeStackNavigator();
+import MainTabNavigator from "./MainTabNavigator";
+
+export type RootStackParamList = {
+  Login: undefined;
+  Register: undefined;
+  MainTabs: undefined;
+};
+
+const Stack =
+  createNativeStackNavigator<RootStackParamList>();
 
 const navigationTheme = {
   ...DefaultTheme,
+
   colors: {
     ...DefaultTheme.colors,
     background: "#fff",
@@ -20,48 +44,60 @@ const navigationTheme = {
 function SplashScreen() {
   return (
     <View style={styles.splash}>
-      <ActivityIndicator size="large" color="#2f6fed" />
-      <Text style={styles.splashText}>Loading...</Text>
+      <ActivityIndicator
+        size="large"
+        color="#2f6fed"
+      />
+
+      <Text style={styles.splashText}>
+        Loading...
+      </Text>
     </View>
   );
 }
 
 export function RootNavigator() {
-  const { isLoggedIn, isLoading } = useAuth();
+  const {
+    isLoggedIn,
+    isLoading,
+  } = useAuth();
 
-  if (isLoading) return <SplashScreen />;
+  if (isLoading) {
+    return <SplashScreen />;
+  }
 
   return (
-    <NavigationContainer theme={navigationTheme}>
+    <NavigationContainer
+      theme={navigationTheme}
+    >
       <Stack.Navigator
         screenOptions={{
-          headerShadowVisible: false,
-          headerStyle: { backgroundColor: "#fff" },
-          headerTitleStyle: { fontWeight: "600", color: "#1a1a1a" },
-          headerTintColor: "#2f6fed",
-          contentStyle: { backgroundColor: "#fff" },
-          animation: "slide_from_right",
+          headerShown: false,
+          contentStyle: {
+            backgroundColor: "#fff",
+          },
         }}
       >
         {isLoggedIn ? (
           <Stack.Screen
-            name="Home"
-            component={HomeScreen}
-            options={{ headerShown: false }}
+            name="MainTabs"
+            component={MainTabNavigator}
           />
         ) : (
           <>
             <Stack.Screen
               name="Login"
               component={LoginScreen}
-              options={{ headerShown: false }}
             />
+
             <Stack.Screen
               name="Register"
               component={RegisterScreen}
               options={{
+                headerShown: true,
                 title: "Create Account",
                 headerBackTitle: "Back",
+                headerShadowVisible: false,
               }}
             />
           </>
@@ -79,8 +115,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     gap: 12,
   },
+
   splashText: {
     fontSize: 14,
     color: "#8a8a8e",
   },
 });
+

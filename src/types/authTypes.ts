@@ -6,4 +6,5 @@ export type AuthContextType = {
   logout: () => Promise<void>;
   isAuthenticating: boolean;
   isRegistering: boolean;
+  user: any;
 };
