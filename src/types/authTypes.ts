@@ -7,4 +7,6 @@ export type AuthContextType = {
   isAuthenticating: boolean;
   isRegistering: boolean;
   user: any;
+  isEditMode: boolean;
+  handleChangeMode: (value:boolean) => Promise<void>
 };

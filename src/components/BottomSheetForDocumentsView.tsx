@@ -7,15 +7,27 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, Feather } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import { useAuth } from "../hook/AuthHook";
 
 const BottomSheetForDocumentsView = ({
   modalVisible,
   selectedDocument,
   closeDocument,
 }: any) => {
+  const navigation = useNavigation<any>();
 
+  const handleChangeMode  = useAuth()?.handleChangeMode
 
+  const handleEditDoc = (docId: string) => {
+    closeDocument();
+
+    navigation.navigate("UpdateDocScreen", {
+      docId,
+    });
+    handleChangeMode(true)
+  };
 
   return (
     <Modal
@@ -23,55 +35,60 @@ const BottomSheetForDocumentsView = ({
       transparent
       animationType="slide"
       onRequestClose={closeDocument}
-      
     >
-         <View style={styles.modalRoot}>
-      <Pressable style={styles.backdrop} onPress={closeDocument} />
+      <View style={styles.modalRoot}>
+        <Pressable style={styles.backdrop} onPress={closeDocument} />
 
-      <View style={styles.sheet}>
-        <View style={styles.sheetHandle} />
+        <View style={styles.sheet}>
+          <View style={styles.sheetHandle} />
 
-        {selectedDocument && (
-          <>
-            <View style={styles.sheetHeader}>
-              <View style={styles.sheetIconContainer}>
-                <Text style={styles.sheetIcon}>📄</Text>
-              </View>
-
-              <View style={styles.sheetHeaderText}>
-                <Text style={styles.sheetTitle} numberOfLines={2}>
-                  {selectedDocument.title}
-                </Text>
-                <View style={styles.sheetDateRow}>
-                  <Ionicons name="time-outline" size={13} color="#8a8a8e" />
-                  <Text style={styles.sheetDate}>
-                    {selectedDocument.created_at}
-                  </Text>
+          {selectedDocument && (
+            <>
+              <View style={styles.sheetHeader}>
+                <View style={styles.sheetIconContainer}>
+                  <Text style={styles.sheetIcon}>📄</Text>
                 </View>
+
+                <View style={styles.sheetHeaderText}>
+                  <Text style={styles.sheetTitle} numberOfLines={2}>
+                    {selectedDocument.title}
+                  </Text>
+                  <View style={styles.sheetDateRow}>
+                    <Ionicons name="time-outline" size={13} color="#8a8a8e" />
+                    <Text style={styles.sheetDate}>
+                      {selectedDocument.created_at}
+                    </Text>
+                  </View>
+                </View>
+
+                <TouchableOpacity
+                  style={[{ ...styles.closeButton, marginRight: 6 }]}
+                  onPress={() => handleEditDoc(selectedDocument?.id)}
+                >
+                  <Feather name="edit" size={20} color="#8a8a8e" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.closeButton}
+                  onPress={closeDocument}
+                >
+                  <Ionicons name="close" size={20} color="#8a8a8e" />
+                </TouchableOpacity>
               </View>
 
-              <TouchableOpacity
-                style={styles.closeButton}
-                onPress={closeDocument}
+              <View style={styles.divider} />
+
+              <ScrollView
+                style={styles.sheetBody}
+                showsVerticalScrollIndicator={false}
               >
-                <Ionicons name="close" size={20} color="#8a8a8e" />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.divider} />
-
-            <ScrollView
-              style={styles.sheetBody}
-              showsVerticalScrollIndicator={false}
-            >
-              <Text style={styles.sheetSectionLabel}>CONTENT</Text>
-              <Text style={styles.sheetRawText}>
-                {selectedDocument.raw_text || "No content available."}
-              </Text>
-            </ScrollView>
-          </>
-        )}
-      </View>
+                <Text style={styles.sheetSectionLabel}>CONTENT</Text>
+                <Text style={styles.sheetRawText}>
+                  {selectedDocument.raw_text || "No content available."}
+                </Text>
+              </ScrollView>
+            </>
+          )}
+        </View>
       </View>
     </Modal>
   );
@@ -82,16 +99,15 @@ export default BottomSheetForDocumentsView;
 const styles = StyleSheet.create({
   // Bottom sheet styles
   modalRoot: {
-  flex: 1,
-  justifyContent: "flex-end",
-   backgroundColor: "rgba(0,0,0,0.4)",
-},
-backdrop: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.4)",
+  },
+  backdrop: {
     // @ts-ignore
-  ...StyleSheet.absoluteFillObject,   // <- key fix: truly fills behind everything
- 
-},
-sheet: {
+    ...StyleSheet.absoluteFillObject, // <- key fix: truly fills behind everything
+  },
+  sheet: {
     height: "55%",
     backgroundColor: "#fff",
     borderTopLeftRadius: 24,

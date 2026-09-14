@@ -14,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import HomeScreen from "../screens/HomeScreen";
 import DocumentsScreen from "../screens/DocumentsScreen";
 import CreateDocumentScreen from "../screens/CreateDocumentScreen";
+import { useAuth } from "../hook/AuthHook";
 
 export type MainTabParamList = {
   Home: undefined;
@@ -37,6 +38,7 @@ function ProfileScreen() {
 }
 
 export default function MainTabNavigator() {
+  const isEditMode = useAuth()?.isEditMode
   return (
     <Tab.Navigator
       initialRouteName="Home"
@@ -66,7 +68,7 @@ export default function MainTabNavigator() {
           if (route.name === "Home") {
             iconName = focused ? "home" : "home-outline";
           } else if (route.name === "Documents") {
-            iconName = focused ? "document-text" : "document-text-outline";
+            iconName =  focused  ? "document-text" : "document-text-outline";
           } else if (route.name === "Profile") {
             iconName = focused ? "person" : "person-outline";
           } else {

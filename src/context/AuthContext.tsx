@@ -19,6 +19,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticating, setIsAuthenticating] = useState<boolean>(false);
   const [isRegistering, setIsRegistering] = useState<boolean>(false);
   const [user, setUser] = useState<any>(null);
+  const [isEditMode, setIsEditMode] = useState<boolean>(false);
 
   useEffect(() => {
     bootstrap();
@@ -35,6 +36,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
+  }
+
+  async function handleChangeMode(value:boolean) {
+    setIsEditMode(value)
+    
   }
 
   async function login(email: string, password: string) {
@@ -92,6 +98,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         register,
         logout,
         user,
+        isEditMode,
+        handleChangeMode
       }}
     >
       {children}

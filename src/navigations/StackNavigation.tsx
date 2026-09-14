@@ -1,19 +1,8 @@
+import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 
-import {
-  NavigationContainer,
-  DefaultTheme,
-} from "@react-navigation/native";
+import { View, ActivityIndicator, StyleSheet, Text } from "react-native";
 
-import {
-  View,
-  ActivityIndicator,
-  StyleSheet,
-  Text,
-} from "react-native";
-
-import {
-  createNativeStackNavigator,
-} from "@react-navigation/native-stack";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import { useAuth } from "../hook/AuthHook";
 
@@ -21,15 +10,18 @@ import LoginScreen from "../screens/LoginScreen";
 import RegisterScreen from "../screens/RegisterScreen";
 
 import MainTabNavigator from "./MainTabNavigator";
+import UpdateDocScreen from "../screens/UpdateDocScreen";
+import CreateDocumentScreen from "../screens/CreateDocumentScreen";
+import EditDocumentScreen from "../screens/EditDocumentScreen";
 
 export type RootStackParamList = {
   Login: undefined;
   Register: undefined;
   MainTabs: undefined;
+  UpdateDocScreen: undefined;
 };
 
-const Stack =
-  createNativeStackNavigator<RootStackParamList>();
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const navigationTheme = {
   ...DefaultTheme,
@@ -44,32 +36,22 @@ const navigationTheme = {
 function SplashScreen() {
   return (
     <View style={styles.splash}>
-      <ActivityIndicator
-        size="large"
-        color="#2f6fed"
-      />
+      <ActivityIndicator size="large" color="#2f6fed" />
 
-      <Text style={styles.splashText}>
-        Loading...
-      </Text>
+      <Text style={styles.splashText}>Loading...</Text>
     </View>
   );
 }
 
 export function RootNavigator() {
-  const {
-    isLoggedIn,
-    isLoading,
-  } = useAuth();
+  const { isLoggedIn, isLoading } = useAuth();
 
   if (isLoading) {
     return <SplashScreen />;
   }
 
   return (
-    <NavigationContainer
-      theme={navigationTheme}
-    >
+    <NavigationContainer theme={navigationTheme}>
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
@@ -79,16 +61,22 @@ export function RootNavigator() {
         }}
       >
         {isLoggedIn ? (
-          <Stack.Screen
-            name="MainTabs"
-            component={MainTabNavigator}
-          />
+          <>
+            <Stack.Screen name="MainTabs" component={MainTabNavigator} />
+            <Stack.Screen
+              name="UpdateDocScreen"
+              component={EditDocumentScreen}
+              options={{
+                headerShown: true,
+                title: "Edit",
+                headerBackTitle: "Back",
+                headerShadowVisible: false,
+              }}
+            />
+          </>
         ) : (
           <>
-            <Stack.Screen
-              name="Login"
-              component={LoginScreen}
-            />
+            <Stack.Screen name="Login" component={LoginScreen} />
 
             <Stack.Screen
               name="Register"
@@ -121,4 +109,3 @@ const styles = StyleSheet.create({
     color: "#8a8a8e",
   },
 });
-

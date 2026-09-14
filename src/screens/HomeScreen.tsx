@@ -29,8 +29,7 @@ export default function HomeScreen({ navigation }: any) {
     }, 60 * 1000);
     return () => clearInterval(interval);
   }, []);
-
-  const userName = user?.email || "there";
+  const userName = user?.full_name || "there";
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
