@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useCallback, useState } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import { api } from "../api/client";
 import BottomSheetForDocumentsView from "../components/BottomSheetForDocumentsView";
+import { DocumentFilterType } from "../types/docTypes";
+import DocumentFilter from "../components/DocumentFilter";
+
+
+const CREATE_DOCUMENT_ROUTE = "Create";
 
 type DocumentItem = {
   id: string;
@@ -19,24 +24,34 @@ type DocumentItem = {
   created_at: string;
 };
 
+// What the detail endpoint actually returns — separate from the list-item
+// shape above, since selectedDocument holds the full record, not a string.
+type DocumentDetail = {
+  id: string;
+  title: string;
+  raw_text: string;
+  created_at: string;
+};
+
 export default function DocumentsScreen({ navigation }: any) {
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selectedDocument, setSelectedDocument] = useState<string | null>(
-    null,
-  );
+  const [selectedDocument, setSelectedDocument] =
+    useState<DocumentDetail | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [selectedFilter, setSelectedFilter] =
+    useState<DocumentFilterType>("all");
 
-    async function fetchDocumentsDetails(itemId: string) {
+  async function fetchDocumentsDetails(itemId: string) {
     setLoading(true);
     try {
       const response: any = await api.get(`/documents/get-document/${itemId}`);
-   
+
       if (response.success) {
         setSelectedDocument(response.data);
         setModalVisible(true);
       } else {
-        Alert.alert("Error", response.message || "Failed to fetch documents");
+        Alert.alert("Error", response.message || "Failed to fetch document");
       }
     } catch (err) {
       Alert.alert("Error", (err as Error).message);
@@ -44,43 +59,52 @@ export default function DocumentsScreen({ navigation }: any) {
       setLoading(false);
     }
   }
-
 
   function closeDocument() {
     setModalVisible(false);
     setSelectedDocument(null);
   }
 
-  async function fetchDocuments() {
+  async function fetchDocuments(filter: DocumentFilterType) {
     setLoading(true);
+      
     try {
-      const response: any = await api.get("/documents/list-documents");
+      const response: any = await api.get(
+        `/documents/list-documents?type=${filter || "all"}`,
+      );
       if (response.success) {
         setDocuments(response.data);
       } else {
         Alert.alert("Error", response.message || "Failed to fetch documents");
       }
     } catch (err) {
+     
       Alert.alert("Error", (err as Error).message);
     } finally {
       setLoading(false);
     }
   }
 
+const handleSelect = (value:DocumentFilterType) => {
+ 
+  setSelectedFilter(value)
+}
+
+
   useFocusEffect(
     useCallback(() => {
-      fetchDocuments();
-    }, []),
+      fetchDocuments(selectedFilter);
+    }, [selectedFilter]),
   );
+
+
 
   const renderDocument = ({ item }: { item: DocumentItem }) => {
     return (
       <TouchableOpacity
         style={styles.card}
         activeOpacity={0.5}
-        onPress={() => {
-          fetchDocumentsDetails(item?.id);
-        }}
+        onPress={() => fetchDocumentsDetails(item.id)}
       >
         <View style={styles.iconContainer}>
           <Text style={styles.icon}>📄</Text>
@@ -101,7 +125,7 @@ export default function DocumentsScreen({ navigation }: any) {
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
-      {/* Header */}
+      {/* Header: title + add button only */}
       <View style={styles.header}>
         <View>
           <Text style={styles.heading}>Documents</Text>
@@ -110,11 +134,18 @@ export default function DocumentsScreen({ navigation }: any) {
 
         <TouchableOpacity
           style={styles.addButton}
-          onPress={() => navigation.navigate("Create")}
+          onPress={() => navigation.navigate(CREATE_DOCUMENT_ROUTE)}
+          hitSlop={8}
         >
           <Text style={styles.addButtonText}>+</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Filters: own row, full width, doesn't compete with the header */}
+      <DocumentFilter
+        selectedFilter={selectedFilter}
+        onFilterChange={handleSelect}
+      />
 
       {/* Loading indicator */}
       {loading && documents.length === 0 ? (
@@ -129,7 +160,7 @@ export default function DocumentsScreen({ navigation }: any) {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.list}
           refreshing={loading}
-          onRefresh={fetchDocuments}
+          onRefresh={() => fetchDocuments(selectedFilter)}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyIcon}>📄</Text>
@@ -143,7 +174,7 @@ export default function DocumentsScreen({ navigation }: any) {
 
               <TouchableOpacity
                 style={styles.createButton}
-                onPress={() => navigation.navigate("CreateDocument")}
+                onPress={() => navigation.navigate(CREATE_DOCUMENT_ROUTE)}
               >
                 <Text style={styles.createButtonText}>Create Document</Text>
               </TouchableOpacity>
@@ -151,6 +182,7 @@ export default function DocumentsScreen({ navigation }: any) {
           }
         />
       )}
+
       <BottomSheetForDocumentsView
         modalVisible={modalVisible}
         selectedDocument={selectedDocument}
@@ -172,7 +204,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     paddingTop: 20,
-    paddingBottom: 16,
+    paddingBottom: 4,
   },
 
   heading: {

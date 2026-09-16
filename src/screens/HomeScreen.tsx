@@ -54,7 +54,7 @@ export default function HomeScreen({ navigation }: any) {
         {/* Action Cards */}
         <TouchableOpacity
           style={[styles.card, styles.primaryCard]}
-          onPress={() => navigation.navigate("CreateDocument")}
+          onPress={() => navigation.navigate("Create")}
         >
           <View style={styles.cardIconContainer}>
             <Ionicons name="add-circle-outline" size={26} color="#fff" />

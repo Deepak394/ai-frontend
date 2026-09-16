@@ -1,7 +1,7 @@
 import axios from "axios";
 import * as SecureStore from "expo-secure-store";
 
-const BASE_URL = "http://192.168.1.45:3000/";
+const BASE_URL = "http://192.168.1.:3000/";
 
 export const api = axios.create({
   baseURL: BASE_URL,
@@ -29,7 +29,7 @@ api.interceptors.response.use(
    
       await SecureStore.deleteItemAsync("authToken");
     }
-   
+  
 const  data = error.response?.data 
     return Promise.reject(data || "Something went wrong");
   }

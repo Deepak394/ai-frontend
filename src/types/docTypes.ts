@@ -1,0 +1,1 @@
+export type DocumentFilterType = "all" | "document" | "note";

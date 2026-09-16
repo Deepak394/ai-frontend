@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  GestureResponderEvent,
 } from "react-native";
 import type { BottomTabBarButtonProps } from "@react-navigation/bottom-tabs";
 
@@ -38,7 +37,6 @@ function ProfileScreen() {
 }
 
 export default function MainTabNavigator() {
-  const isEditMode = useAuth()?.isEditMode
   return (
     <Tab.Navigator
       initialRouteName="Home"

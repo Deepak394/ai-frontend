@@ -102,7 +102,7 @@ export default function EditDocumentScreen({ navigation, route }: any) {
         handleChangeMode(false);
         setTitle("");
         setRawText("");
-        navigation.navigate("Documents");
+        navigation.goBack();
       } else {
         Alert.alert("Error", response.message || "Failed to update document");
       }
