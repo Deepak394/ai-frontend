@@ -13,13 +13,14 @@ import { Ionicons } from "@expo/vector-icons";
 import HomeScreen from "../screens/HomeScreen";
 import DocumentsScreen from "../screens/DocumentsScreen";
 import CreateDocumentScreen from "../screens/CreateDocumentScreen";
-import { useAuth } from "../hook/AuthHook";
+import ConversationListScreen from "../screens/ConversationListScreen";
 
 export type MainTabParamList = {
   Home: undefined;
   Documents: undefined;
   Create: undefined;
   Profile: undefined;
+  ChatsTab: undefined;
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -131,6 +132,8 @@ export default function MainTabNavigator() {
           title: "New",
         }}
       />
+            <Tab.Screen name="ChatsTab" component={ConversationListScreen} options={{ title: "Chats" }} />
+
 
       {/* PROFILE */}
       <Tab.Screen

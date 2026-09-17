@@ -10,15 +10,17 @@ import LoginScreen from "../screens/LoginScreen";
 import RegisterScreen from "../screens/RegisterScreen";
 
 import MainTabNavigator from "./MainTabNavigator";
-import UpdateDocScreen from "../screens/UpdateDocScreen";
-import CreateDocumentScreen from "../screens/CreateDocumentScreen";
 import EditDocumentScreen from "../screens/EditDocumentScreen";
+import ConversationListScreen from "../screens/ConversationListScreen";
+import ChatScreen from "../screens/ChatScreen";
 
 export type RootStackParamList = {
   Login: undefined;
   Register: undefined;
   MainTabs: undefined;
   UpdateDocScreen: undefined;
+  ConversationList: undefined;
+  Chat: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -73,6 +75,10 @@ export function RootNavigator() {
                 headerShadowVisible: false,
               }}
             />
+              <Stack.Screen name="ConversationList" component={ConversationListScreen} options={{ title: "My Chats" }} />
+      <Stack.Screen name="Chat" component={ChatScreen} options={{ title: "Chat" }} />
+   
+  
           </>
         ) : (
           <>
