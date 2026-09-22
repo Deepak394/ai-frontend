@@ -1,53 +1,97 @@
-import { useEffect, useState } from "react";
+
+import { useState, useCallback } from "react";
 import {
   View,
-  Text,
   FlatList,
+  TextInput,
+  Text,
   StyleSheet,
-  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
   Alert,
+  TouchableOpacity,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+import { useFocusEffect } from "@react-navigation/native";
+import { Ionicons } from "@expo/vector-icons";
 import { api } from "../api/client";
 
 type Message = {
-  id: string;
-  role: "user" | "assistant" | string;
+  id: number;
+  role: "user" | "assistant";
   content: string;
-  created_at: string;
 };
 
-export default function ChatScreen({ route }: any) {
-  const conversationId = route?.params?.conversationId;
+export default function ChatScreen({ route, navigation }: any) {
+  const { conversationId } = route.params;
 
   const [messages, setMessages] = useState<Message[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
 
-  useEffect(() => {
-    if (!conversationId) {
-      Alert.alert("Error", "No conversation selected");
-      return;
-    }
+  useFocusEffect(
+    useCallback(() => {
+      loadMessages();
+    }, [conversationId]),
+  );
 
-    fetchMessages();
-  }, [conversationId]);
-
-  async function fetchMessages() {
-    setLoading(true);
+  async function loadMessages() {
     try {
-      const response: any = await api.get(
+      const res:any = await api.get(
         `/conversations/get-details/${conversationId}/messages`,
       );
-
-      if (response.success) {
-        setMessages(response.data);
-      } else {
-        Alert.alert("Error", response.message || "Failed to fetch messages");
+      console.log(res, "res");
+      if (res?.success) {
+        setMessages(res.data);
       }
-    } catch (err) {
-      Alert.alert("Error", (err as Error).message);
+    } catch (error) {
+      Alert.alert("Error", (error as Error).message);
+    }
+  }
+
+  async function handleSend() {
+    const content = input.trim();
+
+    if (!content || sending) return;
+
+    setInput("");
+    setSending(true);
+
+    try {
+      const res:any = await api.post(
+        `/conversations/send/${conversationId}/messages`,
+        {
+          role: "user",
+          content,
+        },
+      );
+     
+      if(!res?.success) {
+        Alert.alert(
+          "Message not sent",
+          res.message || "Something went wrong during message sending. Please try again.",
+        );  
+        return;
+      }
+
+      setMessages((prev) => [
+        ...prev,
+        res.data.userMessage,
+        ...(res.data.assistantMessage
+          ? [res.data.assistantMessage]
+          : []),
+      ]);
+    } catch (error:any) {
+      setInput(content);
+
+      Alert.alert(
+        "Message not sent",
+       error?.message || "Something went wrong. Please try again.",
+      );
     } finally {
-      setLoading(false);
+      setSending(false);
     }
   }
 
@@ -55,19 +99,37 @@ export default function ChatScreen({ route }: any) {
     const isUser = item.role === "user";
 
     return (
+     
       <View
         style={[
-          styles.bubbleRow,
-          isUser ? styles.bubbleRowUser : styles.bubbleRowAssistant,
+          styles.messageWrapper,
+          isUser
+            ? styles.userMessageWrapper
+            : styles.assistantMessageWrapper,
         ]}
       >
+        {!isUser && (
+          <View style={styles.aiAvatar}>
+            <Ionicons name="sparkles" size={16} color="#FFFFFF" />
+          </View>
+        )}
+
         <View
           style={[
-            styles.bubble,
-            isUser ? styles.bubbleUser : styles.bubbleAssistant,
+            styles.messageBubble,
+            isUser
+              ? styles.userBubble
+              : styles.assistantBubble,
           ]}
         >
-          <Text style={isUser ? styles.textUser : styles.textAssistant}>
+          <Text
+            style={[
+              styles.messageText,
+              isUser
+                ? styles.userMessageText
+                : styles.assistantMessageText,
+            ]}
+          >
             {item.content}
           </Text>
         </View>
@@ -76,109 +138,459 @@ export default function ChatScreen({ route }: any) {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={["left", "right", "bottom"]}>
-      {loading ? (
-        <View style={styles.loaderContainer}>
-          <ActivityIndicator size="large" color="#2f6fed" />
-        </View>
-      ) : (
-        <FlatList
-          data={messages}
-          keyExtractor={(item) => item.id}
-          renderItem={renderMessage}
-          contentContainerStyle={styles.list}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyIcon}>💬</Text>
-              <Text style={styles.emptyText}>
-                No messages yet. This is a new conversation.
-              </Text>
+      <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
+        <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+    >
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.headerButton}
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name="chevron-back"
+            size={25}
+            color="#111827"
+          />
+        </TouchableOpacity>
+
+        <View style={styles.headerCenter}>
+          <View style={styles.headerAvatar}>
+            <Ionicons
+              name="sparkles"
+              size={18}
+              color="#FFFFFF"
+            />
+          </View>
+
+          <View>
+            <Text style={styles.headerTitle}>AI Assistant</Text>
+
+            <View style={styles.onlineContainer}>
+              <View style={styles.onlineDot} />
+              <Text style={styles.onlineText}>Online</Text>
             </View>
-          }
-        />
-      )}
-    </SafeAreaView>
+          </View>
+        </View>
+
+        <TouchableOpacity
+          style={styles.headerButton}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name="ellipsis-horizontal"
+            size={23}
+            color="#111827"
+          />
+        </TouchableOpacity>
+      </View>
+
+      {/* Messages */}
+      <FlatList
+        data={messages}
+        keyExtractor={(item) => String(item.id)}
+        renderItem={renderMessage}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.messagesContainer,
+          messages.length === 0 && styles.emptyContainer,
+        ]}
+        keyboardShouldPersistTaps="handled"
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIcon}>
+              <Ionicons
+                name="sparkles"
+                size={32}
+                color="#FFFFFF"
+              />
+            </View>
+
+            <Text style={styles.emptyTitle}>
+              How can I help you?
+            </Text>
+
+            <Text style={styles.emptyDescription}>
+              Ask me anything about your saved documents or notes.
+            </Text>
+
+            <View style={styles.suggestionContainer}>
+              <TouchableOpacity
+                style={styles.suggestion}
+                onPress={() =>
+                  setInput("Summarize this document")
+                }
+              >
+                <Ionicons
+                  name="document-text-outline"
+                  size={18}
+                  color="#4F46E5"
+                />
+
+                <Text style={styles.suggestionText}>
+                  Summarize this document
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.suggestion}
+                onPress={() =>
+                  setInput("What are the key points?")
+                }
+              >
+                <Ionicons
+                  name="bulb-outline"
+                  size={18}
+                  color="#4F46E5"
+                />
+
+                <Text style={styles.suggestionText}>
+                  What are the key points?
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        }
+        ListFooterComponent={
+          sending ? (
+            <View style={styles.typingWrapper}>
+              <View style={styles.aiAvatar}>
+                <Ionicons
+                  name="sparkles"
+                  size={16}
+                  color="#FFFFFF"
+                />
+              </View>
+
+              <View style={styles.typingBubble}>
+                <ActivityIndicator
+                  size="small"
+                  color="#4F46E5"
+                />
+
+                <Text style={styles.typingText}>
+                  Thinking...
+                </Text>
+              </View>
+            </View>
+          ) : null
+        }
+      />
+
+      {/* Input */}
+      <View style={styles.inputContainer}>
+        <View style={styles.inputBox}>
+          <TextInput
+            value={input}
+            onChangeText={setInput}
+            placeholder="Ask anything..."
+            placeholderTextColor="#9CA3AF"
+            style={styles.input}
+            editable={!sending}
+            multiline
+            maxLength={2000}
+          />
+
+          <TouchableOpacity
+            style={[
+              styles.sendButton,
+              (!input.trim() || sending) &&
+                styles.sendButtonDisabled,
+            ]}
+            onPress={handleSend}
+            disabled={!input.trim() || sending}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name="arrow-up"
+              size={20}
+              color="#FFFFFF"
+            />
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.disclaimer}>
+          AI can make mistakes. Check important information.
+        </Text>
+      </View>
+    </KeyboardAvoidingView>
+    </SafeAreaView> 
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-  },
+ safeArea: {
+  flex: 1,
+  backgroundColor: "#FFFFFF",
+},
 
-  loaderContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
+container: {
+  flex: 1,
+  backgroundColor: "#F8FAFC",
+},
 
-  list: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 24,
-    flexGrow: 1,
-  },
-
-  bubbleRow: {
+  /* Header */
+  header: {
+    height: 68,
+    backgroundColor: "#FFFFFF",
     flexDirection: "row",
-    marginBottom: 10,
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
   },
 
-  bubbleRowUser: {
+  headerButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  headerCenter: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+
+  headerAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "#4F46E5",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#111827",
+  },
+
+  onlineContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 2,
+  },
+
+  onlineDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: "#22C55E",
+    marginRight: 5,
+  },
+
+  onlineText: {
+    fontSize: 12,
+    color: "#6B7280",
+  },
+
+  /* Messages */
+  messagesContainer: {
+    paddingHorizontal: 14,
+    paddingTop: 18,
+    paddingBottom: 12,
+  },
+
+  messageWrapper: {
+    flexDirection: "row",
+    marginBottom: 14,
+    alignItems: "flex-end",
+  },
+
+  userMessageWrapper: {
     justifyContent: "flex-end",
   },
 
-  bubbleRowAssistant: {
+  assistantMessageWrapper: {
     justifyContent: "flex-start",
   },
 
-  bubble: {
-    maxWidth: "80%",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 14,
-  },
-
-  bubbleUser: {
-    backgroundColor: "#2f6fed",
-    borderBottomRightRadius: 4,
-  },
-
-  bubbleAssistant: {
-    backgroundColor: "#f1f1f4",
-    borderBottomLeftRadius: 4,
-  },
-
-  textUser: {
-    color: "#fff",
-    fontSize: 15,
-    lineHeight: 20,
-  },
-
-  textAssistant: {
-    color: "#1a1a1a",
-    fontSize: 15,
-    lineHeight: 20,
-  },
-
-  emptyContainer: {
-    flex: 1,
+  aiAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    backgroundColor: "#4F46E5",
     alignItems: "center",
     justifyContent: "center",
+    marginRight: 8,
+  },
+
+  messageBubble: {
+    maxWidth: "78%",
+    paddingHorizontal: 15,
+    paddingVertical: 11,
+    borderRadius: 18,
+  },
+
+  userBubble: {
+    backgroundColor: "#4F46E5",
+    borderBottomRightRadius: 5,
+  },
+
+  assistantBubble: {
+    backgroundColor: "#FFFFFF",
+    borderBottomLeftRadius: 5,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+  },
+
+  messageText: {
+    fontSize: 15,
+    lineHeight: 22,
+  },
+
+  userMessageText: {
+    color: "#FFFFFF",
+  },
+
+  assistantMessageText: {
+    color: "#1F2937",
+  },
+
+  /* Empty state */
+  emptyContainer: {
+    flexGrow: 1,
+  },
+
+  emptyState: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
     paddingHorizontal: 30,
-    paddingTop: 60,
   },
 
   emptyIcon: {
-    fontSize: 44,
-    marginBottom: 16,
+    width: 70,
+    height: 70,
+    borderRadius: 22,
+    backgroundColor: "#4F46E5",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 18,
   },
 
-  emptyText: {
+  emptyTitle: {
+    fontSize: 23,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 8,
+  },
+
+  emptyDescription: {
+    fontSize: 14,
+    lineHeight: 21,
     textAlign: "center",
-    lineHeight: 20,
-    color: "#8a8a8e",
+    color: "#6B7280",
+    maxWidth: 300,
+  },
+
+  suggestionContainer: {
+    width: "100%",
+    marginTop: 24,
+    gap: 10,
+  },
+
+  suggestion: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+  },
+
+  suggestionText: {
+    marginLeft: 10,
+    fontSize: 14,
+    color: "#374151",
+    fontWeight: "500",
+  },
+
+  /* Typing */
+  typingWrapper: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    marginBottom: 10,
+  },
+
+  typingBubble: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 16,
+    borderBottomLeftRadius: 5,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+
+  typingText: {
+    fontSize: 13,
+    color: "#6B7280",
+  },
+
+  /* Input */
+  inputContainer: {
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === "ios" ? 12 : 10,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+  },
+
+  inputBox: {
+    minHeight: 48,
+    maxHeight: 120,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    backgroundColor: "#F3F4F6",
+    borderRadius: 24,
+    paddingLeft: 16,
+    paddingRight: 6,
+    paddingVertical: 5,
+  },
+
+  input: {
+    flex: 1,
+    maxHeight: 100,
+    fontSize: 15,
+    color: "#111827",
+    paddingTop: 8,
+    paddingBottom: 8,
+  },
+
+  sendButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "#4F46E5",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  sendButtonDisabled: {
+    backgroundColor: "#C7D2FE",
+  },
+
+  disclaimer: {
+    textAlign: "center",
+    fontSize: 10,
+    color: "#9CA3AF",
+    marginTop: 7,
   },
 });
+
