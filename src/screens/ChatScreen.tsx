@@ -1,5 +1,4 @@
-
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import {
   View,
   FlatList,
@@ -13,9 +12,11 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
+import EventSource from "react-native-sse";
+import * as SecureStore from "expo-secure-store";
 import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
+import Entypo from "@expo/vector-icons/Entypo";
 import { api } from "../api/client";
 
 type Message = {
@@ -26,7 +27,7 @@ type Message = {
 
 export default function ChatScreen({ route, navigation }: any) {
   const { conversationId } = route.params;
-
+  const eventSourceRef = useRef<EventSource | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -39,7 +40,7 @@ export default function ChatScreen({ route, navigation }: any) {
 
   async function loadMessages() {
     try {
-      const res:any = await api.get(
+      const res: any = await api.get(
         `/conversations/get-details/${conversationId}/messages`,
       );
       console.log(res, "res");
@@ -51,61 +52,198 @@ export default function ChatScreen({ route, navigation }: any) {
     }
   }
 
-  async function handleSend() {
-    const content = input.trim();
+  // async function handleSend() {
+  //   const content = input.trim();
 
-    if (!content || sending) return;
+  //   if (!content || sending) return;
+
+  //   setInput("");
+  //   setSending(true);
+
+  //   try {
+  //     const res:any = await api.post(
+  //       `/conversations/send/${conversationId}/messages`,
+  //       {
+  //         role: "user",
+  //         content,
+  //       },
+  //     );
+
+  //     if(!res?.success) {
+  //       Alert.alert(
+  //         "Message not sent",
+  //         res.message || "Something went wrong during message sending. Please try again.",
+  //       );
+  //       return;
+  //     }
+
+  //     setMessages((prev) => [
+  //       ...prev,
+  //       res.data.userMessage,
+  //       ...(res.data.assistantMessage
+  //         ? [res.data.assistantMessage]
+  //         : []),
+  //     ]);
+  //   } catch (error:any) {
+  //     setInput(content);
+
+  //     Alert.alert(
+  //       "Message not sent",
+  //      error?.message || "Something went wrong. Please try again.",
+  //     );
+  //   } finally {
+  //     setSending(false);
+  //   }
+  // }
+
+  async function handleSend() {
+    if (!input.trim() || sending) return;
+
+    const content = input.trim();
 
     setInput("");
     setSending(true);
 
-    try {
-      const res:any = await api.post(
-        `/conversations/send/${conversationId}/messages`,
-        {
-          role: "user",
-          content,
-        },
-      );
-     
-      if(!res?.success) {
-        Alert.alert(
-          "Message not sent",
-          res.message || "Something went wrong during message sending. Please try again.",
-        );  
-        return;
+    const token = await SecureStore.getItemAsync("authToken");
+
+    if (!token) {
+      setSending(false);
+      return;
+    }
+
+    let assistantDraft = "";
+
+    const draftId = -Date.now();
+
+    // Temporary assistant bubble
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: draftId,
+        role: "assistant",
+        content: "",
+      },
+    ]);
+
+    const url = `${api.defaults.baseURL}conversations/${conversationId}/messages/stream`;
+
+    const es = new EventSource(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        role: "user",
+        content,
+      }),
+    });
+
+    eventSourceRef.current = es;
+
+    es.addEventListener("open", () => {
+      console.log("SSE CONNECTED");
+    });
+
+    es.addEventListener("user_message", (event: any) => {
+      console.log("USER MESSAGE EVENT:", event.data);
+
+      try {
+        const userMessage = JSON.parse(event.data);
+
+        setMessages((prev) => {
+          // Remove temporary assistant
+          const withoutDraft = prev.filter((message) => message.id !== draftId);
+
+          return [
+            ...withoutDraft,
+            userMessage,
+            {
+              id: draftId,
+              role: "assistant",
+              content: "",
+            },
+          ];
+        });
+      } catch (error) {
+        console.error("USER MESSAGE PARSE ERROR:", error);
+      }
+    });
+
+    es.addEventListener("chunk", (event: any) => {
+      console.log("CHUNK EVENT:", event.data);
+
+      try {
+        const { text } = JSON.parse(event.data);
+
+        assistantDraft += text;
+
+        setMessages((prev) =>
+          prev.map((message) =>
+            message.id === draftId
+              ? {
+                  ...message,
+                  content: assistantDraft,
+                }
+              : message,
+          ),
+        );
+      } catch (error) {
+        console.error("CHUNK PARSE ERROR:", error);
+      }
+    });
+
+    es.addEventListener("done", (event: any) => {
+      console.log("DONE EVENT:", event.data);
+
+      try {
+        const finalAssistantMessage = JSON.parse(event.data);
+
+        setMessages((prev) =>
+          prev.map((message) =>
+            message.id === draftId ? finalAssistantMessage : message,
+          ),
+        );
+      } catch (error) {
+        console.error("DONE PARSE ERROR:", error);
       }
 
-      setMessages((prev) => [
-        ...prev,
-        res.data.userMessage,
-        ...(res.data.assistantMessage
-          ? [res.data.assistantMessage]
-          : []),
-      ]);
-    } catch (error:any) {
-      setInput(content);
-
-      Alert.alert(
-        "Message not sent",
-       error?.message || "Something went wrong. Please try again.",
-      );
-    } finally {
       setSending(false);
+      es.close();
+      eventSourceRef.current = null;
+    });
+
+    es.addEventListener("error", (event: any) => {
+      console.log("SSE ERROR:", event);
+
+      setMessages((prev) => prev.filter((message) => message.id !== draftId));
+
+      setSending(false);
+      es.close();
+      eventSourceRef.current = null;
+    });
+  }
+
+  function handleStopGenerating() {
+    console.log("Stopping AI generation...");
+
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
     }
+
+    setSending(false);
   }
 
   const renderMessage = ({ item }: { item: Message }) => {
     const isUser = item.role === "user";
+    const isEmptyAssistantDraft = !isUser && item.content === "";
 
     return (
-     
       <View
         style={[
           styles.messageWrapper,
-          isUser
-            ? styles.userMessageWrapper
-            : styles.assistantMessageWrapper,
+          isUser ? styles.userMessageWrapper : styles.assistantMessageWrapper,
         ]}
       >
         {!isUser && (
@@ -114,224 +252,192 @@ export default function ChatScreen({ route, navigation }: any) {
           </View>
         )}
 
-        <View
+        <TouchableOpacity
+          activeOpacity={item.failed ? 0.6 : 1}
+          disabled={!item.failed}
+          onPress={() => item.failed && handleSend(item.content)}
           style={[
             styles.messageBubble,
-            isUser
-              ? styles.userBubble
-              : styles.assistantBubble,
+            isUser ? styles.userBubble : styles.assistantBubble,
+            item.failed && styles.failedBubble,
           ]}
         >
-          <Text
-            style={[
-              styles.messageText,
-              isUser
-                ? styles.userMessageText
-                : styles.assistantMessageText,
-            ]}
-          >
-            {item.content}
-          </Text>
-        </View>
+          {isEmptyAssistantDraft ? (
+            <ActivityIndicator size="small" color="#4F46E5" />
+          ) : (
+            <Text
+              style={[
+                styles.messageText,
+                isUser ? styles.userMessageText : styles.assistantMessageText,
+              ]}
+            >
+              {item.content}
+            </Text>
+          )}
+        </TouchableOpacity>
       </View>
     );
   };
 
   return (
-      <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
-        <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.headerButton}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-        >
-          <Ionicons
-            name="chevron-back"
-            size={25}
-            color="#111827"
-          />
-        </TouchableOpacity>
-
-        <View style={styles.headerCenter}>
-          <View style={styles.headerAvatar}>
-            <Ionicons
-              name="sparkles"
-              size={18}
-              color="#FFFFFF"
-            />
-          </View>
-
-          <View>
-            <Text style={styles.headerTitle}>AI Assistant</Text>
-
-            <View style={styles.onlineContainer}>
-              <View style={styles.onlineDot} />
-              <Text style={styles.onlineText}>Online</Text>
-            </View>
-          </View>
-        </View>
-
-        <TouchableOpacity
-          style={styles.headerButton}
-          activeOpacity={0.7}
-        >
-          <Ionicons
-            name="ellipsis-horizontal"
-            size={23}
-            color="#111827"
-          />
-        </TouchableOpacity>
-      </View>
-
-      {/* Messages */}
-      <FlatList
-        data={messages}
-        keyExtractor={(item) => String(item.id)}
-        renderItem={renderMessage}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[
-          styles.messagesContainer,
-          messages.length === 0 && styles.emptyContainer,
-        ]}
-        keyboardShouldPersistTaps="handled"
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <View style={styles.emptyIcon}>
-              <Ionicons
-                name="sparkles"
-                size={32}
-                color="#FFFFFF"
-              />
-            </View>
-
-            <Text style={styles.emptyTitle}>
-              How can I help you?
-            </Text>
-
-            <Text style={styles.emptyDescription}>
-              Ask me anything about your saved documents or notes.
-            </Text>
-
-            <View style={styles.suggestionContainer}>
-              <TouchableOpacity
-                style={styles.suggestion}
-                onPress={() =>
-                  setInput("Summarize this document")
-                }
-              >
-                <Ionicons
-                  name="document-text-outline"
-                  size={18}
-                  color="#4F46E5"
-                />
-
-                <Text style={styles.suggestionText}>
-                  Summarize this document
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.suggestion}
-                onPress={() =>
-                  setInput("What are the key points?")
-                }
-              >
-                <Ionicons
-                  name="bulb-outline"
-                  size={18}
-                  color="#4F46E5"
-                />
-
-                <Text style={styles.suggestionText}>
-                  What are the key points?
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        }
-        ListFooterComponent={
-          sending ? (
-            <View style={styles.typingWrapper}>
-              <View style={styles.aiAvatar}>
-                <Ionicons
-                  name="sparkles"
-                  size={16}
-                  color="#FFFFFF"
-                />
-              </View>
-
-              <View style={styles.typingBubble}>
-                <ActivityIndicator
-                  size="small"
-                  color="#4F46E5"
-                />
-
-                <Text style={styles.typingText}>
-                  Thinking...
-                </Text>
-              </View>
-            </View>
-          ) : null
-        }
-      />
-
-      {/* Input */}
-      <View style={styles.inputContainer}>
-        <View style={styles.inputBox}>
-          <TextInput
-            value={input}
-            onChangeText={setInput}
-            placeholder="Ask anything..."
-            placeholderTextColor="#9CA3AF"
-            style={styles.input}
-            editable={!sending}
-            multiline
-            maxLength={2000}
-          />
-
+    <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+      >
+        {/* Header */}
+        <View style={styles.header}>
           <TouchableOpacity
-            style={[
-              styles.sendButton,
-              (!input.trim() || sending) &&
-                styles.sendButtonDisabled,
-            ]}
-            onPress={handleSend}
-            disabled={!input.trim() || sending}
-            activeOpacity={0.8}
+            style={styles.headerButton}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.7}
           >
-            <Ionicons
-              name="arrow-up"
-              size={20}
-              color="#FFFFFF"
-            />
+            <Ionicons name="chevron-back" size={25} color="#111827" />
+          </TouchableOpacity>
+
+          <View style={styles.headerCenter}>
+            <View style={styles.headerAvatar}>
+              <Ionicons name="sparkles" size={18} color="#FFFFFF" />
+            </View>
+
+            <View>
+              <Text style={styles.headerTitle}>AI Assistant</Text>
+
+              <View style={styles.onlineContainer}>
+                <View style={styles.onlineDot} />
+                <Text style={styles.onlineText}>Online</Text>
+              </View>
+            </View>
+          </View>
+
+          <TouchableOpacity style={styles.headerButton} activeOpacity={0.7}>
+            <Ionicons name="ellipsis-horizontal" size={23} color="#111827" />
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.disclaimer}>
-          AI can make mistakes. Check important information.
-        </Text>
-      </View>
-    </KeyboardAvoidingView>
-    </SafeAreaView> 
+        {/* Messages */}
+        <FlatList
+          data={messages}
+          keyExtractor={(item) => String(item.id)}
+          renderItem={renderMessage}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[
+            styles.messagesContainer,
+            messages.length === 0 && styles.emptyContainer,
+          ]}
+          keyboardShouldPersistTaps="handled"
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <View style={styles.emptyIcon}>
+                <Ionicons name="sparkles" size={32} color="#FFFFFF" />
+              </View>
+
+              <Text style={styles.emptyTitle}>How can I help you?</Text>
+
+              <Text style={styles.emptyDescription}>
+                Ask me anything about your saved documents or notes.
+              </Text>
+
+              <View style={styles.suggestionContainer}>
+                <TouchableOpacity
+                  style={styles.suggestion}
+                  onPress={() => setInput("Summarize this document")}
+                >
+                  <Ionicons
+                    name="document-text-outline"
+                    size={18}
+                    color="#4F46E5"
+                  />
+
+                  <Text style={styles.suggestionText}>
+                    Summarize this document
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.suggestion}
+                  onPress={() => setInput("What are the key points?")}
+                >
+                  <Ionicons name="bulb-outline" size={18} color="#4F46E5" />
+
+                  <Text style={styles.suggestionText}>
+                    What are the key points?
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          }
+          ListFooterComponent={
+            sending ? (
+              <View style={styles.typingWrapper}>
+                <View style={styles.aiAvatar}>
+                  <Ionicons name="sparkles" size={16} color="#FFFFFF" />
+                </View>
+
+                <View style={styles.typingBubble}>
+                  <ActivityIndicator size="small" color="#4F46E5" />
+
+                  <Text style={styles.typingText}>Thinking...</Text>
+                </View>
+              </View>
+            ) : null
+          }
+        />
+
+        {/* Input */}
+        <View style={styles.inputContainer}>
+          <View style={styles.inputBox}>
+            <TextInput
+              value={input}
+              onChangeText={setInput}
+              placeholder="Ask anything..."
+              placeholderTextColor="#9CA3AF"
+              style={styles.input}
+              editable={!sending}
+              multiline
+              maxLength={2000}
+            />
+
+            {sending ? (
+              <TouchableOpacity
+                style={styles.sendButton}
+                onPress={handleStopGenerating}
+                activeOpacity={0.8}
+              >
+                <Entypo name="controller-stop" size={20} color="#FFFFFF" />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={styles.sendButton}
+                onPress={handleSend}
+                disabled={!input.trim()}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="arrow-up" size={20} color="#FFFFFF" />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <Text style={styles.disclaimer}>
+            AI can make mistakes. Check important information.
+          </Text>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
- safeArea: {
-  flex: 1,
-  backgroundColor: "#FFFFFF",
-},
+  safeArea: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+  },
 
-container: {
-  flex: 1,
-  backgroundColor: "#F8FAFC",
-},
+  container: {
+    flex: 1,
+    backgroundColor: "#F8FAFC",
+  },
 
   /* Header */
   header: {
@@ -460,6 +566,7 @@ container: {
   emptyContainer: {
     flexGrow: 1,
   },
+
 
   emptyState: {
     flex: 1,
@@ -593,4 +700,3 @@ container: {
     marginTop: 7,
   },
 });
-
